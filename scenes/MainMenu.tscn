@@ -1,0 +1,170 @@
+[gd_scene load_steps=8 format=2]
+
+[ext_resource path="res://scripts/ui/main_menu.gd" type="Script" id=1]
+[ext_resource path="res://assets/ui/menu_bg.png" type="Texture" id=2]
+[ext_resource path="res://assets/fonts/game_font.ttf" type="DynamicFontData" id=3]
+[ext_resource path="res://assets/sounds/game_start.wav" type="AudioStream" id=4]
+
+[sub_resource type="DynamicFont" id=1]
+size = 64
+font_data = ExtResource( 3 )
+
+[sub_resource type="DynamicFont" id=2]
+size = 32
+font_data = ExtResource( 3 )
+
+[sub_resource type="StyleBoxFlat" id=3]
+bg_color = Color( 0.2, 0.2, 0.4, 0.8 )
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+shadow_size = 5
+shadow_offset = Vector2( 3, 3 )
+
+[node name="MainMenu" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource( 1 )
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="Background" type="TextureRect"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+texture = ExtResource( 2 )
+expand = true
+stretch_mode = 7
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="Title" type="Label"]
+anchor_left = 0.5
+anchor_right = 0.5
+margin_left = -300.0
+margin_top = 100.0
+margin_right = 300.0
+margin_bottom = 200.0
+custom_fonts/font = SubResource( 1 )
+custom_colors/font_color = Color( 1, 1, 1, 1 )
+custom_colors/font_outline_modulate = Color( 0, 0, 0, 1 )
+custom_colors/font_color_shadow = Color( 0, 0, 0, 0.5 )
+text = "Special Chess"
+align = 1
+valign = 1
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="VBoxContainer" type="VBoxContainer"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+margin_left = -150.0
+margin_top = -150.0
+margin_right = 150.0
+margin_bottom = 250.0
+custom_constants/separation = 20
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="PlayButton" type="Button"]
+margin_right = 300.0
+margin_bottom = 60.0
+rect_min_size = Vector2( 300, 60 )
+custom_fonts/font = SubResource( 2 )
+custom_styles/normal = SubResource( 3 )
+text = "Play"
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="SettingsButton" type="Button"]
+margin_top = 80.0
+margin_right = 300.0
+margin_bottom = 140.0
+rect_min_size = Vector2( 300, 60 )
+custom_fonts/font = SubResource( 2 )
+custom_styles/normal = SubResource( 3 )
+text = "Settings"
+
+[node name="QuitButton" type="Button"]
+margin_top = 160.0
+margin_right = 300.0
+margin_bottom = 220.0
+rect_min_size = Vector2( 300, 60 )
+custom_fonts/font = SubResource( 2 )
+custom_styles/normal = SubResource( 3 )
+text = "Quit"
+
+[node name="BackgroundMusic" type="AudioStreamPlayer"]
+stream = ExtResource( 4 )
+volume_db = -10.0
+
+[node name="SettingsDialog" type="PopupPanel"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+margin_left = -200.0
+margin_top = -150.0
+margin_right = 200.0
+margin_bottom = 150.0
+popup_exclusive = true
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="VBoxContainer" type="VBoxContainer"]
+margin_left = 4.0
+margin_top = 4.0
+margin_right = 396.0
+margin_bottom = 296.0
+custom_constants/separation = 20
+__meta__ = {
+"_edit_use_anchors_": false
+}
+
+[node name="Label" type="Label"]
+margin_right = 392.0
+margin_bottom = 40.0
+custom_fonts/font = SubResource( 2 )
+text = "Settings"
+align = 1
+
+[node name="SoundCheck" type="CheckBox"]
+margin_top = 60.0
+margin_right = 392.0
+margin_bottom = 100.0
+custom_fonts/font = SubResource( 2 )
+pressed = true
+text = "Sound Effects"
+
+[node name="MusicCheck" type="CheckBox"]
+margin_top = 120.0
+margin_right = 392.0
+margin_bottom = 160.0
+custom_fonts/font = SubResource( 2 )
+pressed = true
+text = "Music"
+
+[node name="DifficultyLabel" type="Label"]
+margin_top = 180.0
+margin_right = 392.0
+margin_bottom = 220.0
+custom_fonts/font = SubResource( 2 )
+text = "Difficulty"
+align = 1
+
+[node name="DifficultyOptions" type="OptionButton"]
+margin_top = 240.0
+margin_right = 392.0
+margin_bottom = 280.0
+custom_fonts/font = SubResource( 2 )
+text = "Medium"
+items = [ "Easy", null, false, 0, null, "Medium", null, false, 1, null, "Hard", null, false, 2, null ]
+selected = 1
