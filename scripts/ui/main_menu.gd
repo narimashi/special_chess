@@ -38,14 +38,14 @@ func _setup_default_fonts() -> void:
 	# シーン内のすべてのラベルとボタンにデフォルトフォントを設定
 	var children = find_children("*", "Label")
 	for child in children:
-		var theme = Theme.new()
-		child.theme = theme
+		var custom_theme = Theme.new()
+		child.theme = custom_theme
 	
 	# ボタンのフォントも設定
 	children = find_children("*", "Button")
 	for child in children:
-		var theme = Theme.new()
-		child.theme = theme
+		var custom_theme = Theme.new()
+		child.theme = custom_theme
 
 func _on_play_button_pressed() -> void:
 	# ゲームモード選択画面へ

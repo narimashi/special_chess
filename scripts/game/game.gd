@@ -1,4 +1,40 @@
+# 音声ファイルのプリロード
 extends Node2D
+func _preload_audio_files() -> void:
+	if not Globals.sound_enabled:
+		return
+		
+	var sound_paths = {
+		"GameStart": "res://assets/sounds/game_start.mp3",
+		"Move": "res://assets/sounds/move.mp3",
+		"Capture": "res://assets/sounds/capture.mp3",
+		"Check": "res://assets/sounds/check.mp3",
+		"Victory": "res://assets/sounds/victory.mp3",
+		"Defeat": "res://assets/sounds/defeat.mp3",
+		"Tactic": "res://assets/sounds/tactic.mp3"
+	}
+	
+	for sound_name in sound_paths:
+		var node_path = "Sounds/" + sound_name
+		if has_node(node_path):
+			var audio_path = sound_paths[sound_name]
+			var audio_player = get_node(node_path)
+			
+			# MP3ファイルが存在すればロード
+			if ResourceLoader.exists(audio_path):
+				audio_player.stream = load(audio_path)
+			else:
+				# 音声ファイルがない場合は無音のストリームを作成
+				var stream = AudioStreamMP3.new()
+				audio_player.stream = stream
+
+# ゲーム開始
+func _start_game() -> void:
+	# ゲーム開始音の再生
+	if Globals.sound_enabled and has_node("Sounds/GameStart") and $Sounds/GameStart.stream != null:
+		$Sounds/GameStart.play()
+
+
 
 # ゲーム画面の管理
 
@@ -28,16 +64,11 @@ func _ready() -> void:
 	# UIの初期化
 	_update_ui()
 	
-	# ゲーム開始音の再生
-	if Globals.sound_enabled:
-		if has_node("Sounds/GameStart"):
-			if $Sounds/GameStart.stream == null:
-				var audio_path = "res://assets/sounds/game_start.mp3"
-				if FileAccess.file_exists(audio_path):
-					$Sounds/GameStart.stream = load(audio_path)
-			
-			if $Sounds/GameStart.stream != null:
-				$Sounds/GameStart.play()
+	# MP3音声ファイルのプリロード
+	_preload_audio_files()
+	
+	# ゲーム開始
+	_start_game()
 
 func _process(_delta: float) -> void:
 	# ボットの番かチェック
@@ -129,19 +160,9 @@ func _move_piece(piece, to_pos: Vector2) -> void:
 	
 	if success:
 		if captured:
-			if Globals.sound_enabled and has_node("Sounds/Capture"):
-				var audio_path = "res://assets/sounds/capture.mp3"
-				if FileAccess.file_exists(audio_path) and $Sounds/Capture.stream == null:
-					$Sounds/Capture.stream = load(audio_path)
-				if $Sounds/Capture.stream != null:
-					$Sounds/Capture.play()
+			_play_sound("Capture")
 		else:
-			if Globals.sound_enabled and has_node("Sounds/Move"):
-				var audio_path = "res://assets/sounds/move.mp3"
-				if FileAccess.file_exists(audio_path) and $Sounds/Move.stream == null:
-					$Sounds/Move.stream = load(audio_path)
-				if $Sounds/Move.stream != null:
-					$Sounds/Move.play()
+			_play_sound("Move")
 				
 		selected_piece = null
 		valid_moves = []
@@ -207,24 +228,23 @@ func _handle_captured_area_click(screen_pos: Vector2) -> void:
 		selected_captured_piece = null
 		$CapturedArea.clear_selection()
 
+# 効果音再生
+func _play_sound(sound_name: String) -> void:
+	if not Globals.sound_enabled:
+		return
+		
+	var node_path = "Sounds/" + sound_name
+	if has_node(node_path):
+		var audio_player = get_node(node_path)
+		if audio_player.stream != null:
+			audio_player.play()
+
 func _on_check() -> void:
-	if Globals.sound_enabled and has_node("Sounds/Check"):
-		var audio_path = "res://assets/sounds/check.mp3"
-		if FileAccess.file_exists(audio_path) and $Sounds/Check.stream == null:
-			$Sounds/Check.stream = load(audio_path)
-		if $Sounds/Check.stream != null:
-			$Sounds/Check.play()
-	
+	_play_sound("Check")
 	$CutInManager.play_cutin("check")
 
 func _on_tactic_detected(tactic: String) -> void:
-	if Globals.sound_enabled and has_node("Sounds/Tactic"):
-		var audio_path = "res://assets/sounds/tactic.mp3"
-		if FileAccess.file_exists(audio_path) and $Sounds/Tactic.stream == null:
-			$Sounds/Tactic.stream = load(audio_path)
-		if $Sounds/Tactic.stream != null:
-			$Sounds/Tactic.play()
-	
+	_play_sound("Tactic")
 	$CutInManager.play_cutin(tactic)
 
 func _on_game_over(winner) -> void:
@@ -237,21 +257,10 @@ func _on_game_over(winner) -> void:
 		# 勝敗あり
 		$GameOverDialog.show_winner(winner)
 		
-		if Globals.sound_enabled:
-			if winner == Globals.Player.WHITE:
-				if has_node("Sounds/Victory"):
-					var audio_path = "res://assets/sounds/victory.mp3"
-					if FileAccess.file_exists(audio_path) and $Sounds/Victory.stream == null:
-						$Sounds/Victory.stream = load(audio_path)
-					if $Sounds/Victory.stream != null:
-						$Sounds/Victory.play()
-			else:
-				if has_node("Sounds/Defeat"):
-					var audio_path = "res://assets/sounds/defeat.mp3"
-					if FileAccess.file_exists(audio_path) and $Sounds/Defeat.stream == null:
-						$Sounds/Defeat.stream = load(audio_path)
-					if $Sounds/Defeat.stream != null:
-						$Sounds/Defeat.play()
+		if winner == Globals.Player.WHITE:
+			_play_sound("Victory")
+		else:
+			_play_sound("Defeat")
 
 func _on_resign_button_pressed() -> void:
 	if !is_game_over:

@@ -47,6 +47,10 @@ func _ready() -> void:
 	# 初期状態では非表示
 	$CutInContainer.visible = false
 	
+	# ラベルにシステムフォントを設定
+	if cutin_label:
+		cutin_label.add_theme_font_size_override("font_size", 32)
+	
 	# アニメーションの作成
 	if not animation_player.has_animation("cutin_animation"):
 		_create_animation()
@@ -82,46 +86,34 @@ func play_cutin(tactic_name: String) -> void:
 	
 	# カットイン画像とテキストの設定
 	cutin_sprite.texture = null
-	if cutin_data[tactic_name].has("image"):
-		var image_path = cutin_data[tactic_name]["image"]
-		if FileAccess.file_exists(image_path):
-			var texture = load(image_path)
-			if texture:
-				cutin_sprite.texture = texture
+	
+	# 画像をロード（あれば）
+	var image_path = cutin_data[tactic_name].get("image", "")
+	if ResourceLoader.exists(image_path):
+		cutin_sprite.texture = load(image_path)
 	
 	# テキストを設定
-	cutin_label.text = cutin_data[tactic_name]["text"]
-	
-	# システムフォントを確保
-	if cutin_label:
-		var theme = cutin_label.get_theme() if cutin_label.get_theme() else Theme.new()
-		cutin_label.theme = theme
+	cutin_label.text = cutin_data[tactic_name].get("text", tactic_name.capitalize())
 	
 	# コンテナを表示
 	$CutInContainer.visible = true
+	$CutInContainer.modulate = Color(1, 1, 1, 1) # 完全に不透明に設定
 	
 	# サウンドの再生
-	if Globals.sound_enabled and cutin_data[tactic_name].has("sound"):
-		var sound_path = cutin_data[tactic_name]["sound"]
-		if FileAccess.file_exists(sound_path):
-			var stream = load(sound_path)
-			if stream:
-				sound_player.stream = stream
-				sound_player.play()
+	if Globals.sound_enabled and sound_player:
+		var sound_path = cutin_data[tactic_name].get("sound", "")
+		if ResourceLoader.exists(sound_path):
+			sound_player.stream = load(sound_path)
+			sound_player.play()
 	
 	# アニメーションの再生
-	if animation_player.has_animation("cutin_animation"):
+	if animation_player and animation_player.has_animation("cutin_animation"):
 		animation_player.play("cutin_animation")
 		# アニメーション完了を待機
 		await animation_player.animation_finished
 	else:
-		# アニメーションがない場合は手動でフェードインアウト
-		$CutInContainer.modulate.a = 0
-		var tween = create_tween()
-		tween.tween_property($CutInContainer, "modulate:a", 1.0, 0.5)
-		tween.tween_interval(1.0)
-		tween.tween_property($CutInContainer, "modulate:a", 0.0, 0.5)
-		await tween.finished
+		# アニメーションがない場合は3秒待って手動で非表示
+		await get_tree().create_timer(3.0).timeout
 	
 	# 非表示に戻す
 	$CutInContainer.visible = false

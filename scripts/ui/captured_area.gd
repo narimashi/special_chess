@@ -1,4 +1,29 @@
-extends Control
+# 駒の代替テクスチャを作成
+func _create_default_piece_texture(player: int, piece_type: String) -> Texture2D:
+	var size = 64
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0)) # 透明で初期化
+	
+	# 駒の種類に基づいて形を決定
+	var color = Color.WHITE if player == Globals.Player.WHITE else Color.BLACK
+	var border_color = Color.BLACK if player == Globals.Player.WHITE else Color.WHITE
+	
+	# 基本の円を描画
+	for x in range(size):
+		for y in range(size):
+			var center = Vector2(size/2, size/2)
+			var pos = Vector2(x, y)
+			var dist = pos.distance_to(center)
+			
+			# 外側の輪郭（境界線）
+			if dist <= size/2:
+				if dist > size/2 - 2:
+					image.set_pixel(x, y, border_color)
+				else:
+					image.set_pixel(x, y, color)
+	
+	# ImageTextureを作成して返す
+	return ImageTexture.create_from_image(image)extends Control
 
 # 持ち駒表示エリア
 
@@ -68,23 +93,11 @@ func _draw_captured_pieces(player: int, pieces: Array, area_rect: Rect2) -> void
 		var texture = null
 		
 		# テクスチャファイルが存在するか確認
-		if FileAccess.file_exists(texture_path):
+		if ResourceLoader.exists(texture_path):
 			texture = load(texture_path)
 		else:
-			# デフォルトの代替テクスチャを作成（円形）
-			var image = Image.create(64, 64, false, Image.FORMAT_RGBA8)
-			image.fill(Color.WHITE if player == Globals.Player.WHITE else Color.BLACK)
-			
-			# 円を描く
-			for x in range(64):
-				for y in range(64):
-					var dist = Vector2(x - 32, y - 32).length()
-					if dist > 30:
-						image.set_pixel(x, y, Color(0, 0, 0, 0))
-			
-			# テクスチャとして設定
-			var img_texture = ImageTexture.create_from_image(image)
-			texture = img_texture
+			# デフォルトの代替テクスチャを作成（黒白の円形）
+			texture = _create_default_piece_texture(player, piece_name)
 		
 		if texture:
 			sprite.texture = texture
@@ -94,6 +107,52 @@ func _draw_captured_pieces(player: int, pieces: Array, area_rect: Rect2) -> void
 			sprite.position = Vector2(
 				area_rect.position.x + 40 + i * piece_spacing,
 				area_rect.position.y + area_rect.size.y / 2
+			)
+			
+			sprite.add_to_group("captured_" + str(player))
+			add_child(sprite)
+	
+			)
+			
+			sprite.add_to_group("captured_" + str(player))
+			add_child(sprite)
+
+# 駒の代替テクスチャを作成
+func _create_default_piece_texture(player: int, piece_type: String) -> Texture2D:
+	var size = 64
+	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
+	image.fill(Color(0, 0, 0, 0)) # 透明で初期化
+	
+	# 駒の種類に基づいて形を決定
+	var color = Color.WHITE if player == Globals.Player.WHITE else Color.BLACK
+	var border_color = Color.BLACK if player == Globals.Player.WHITE else Color.WHITE
+	
+	# 基本の円を描画
+	for x in range(size):
+		for y in range(size):
+			var center = Vector2(size/2, size/2)
+			var pos = Vector2(x, y)
+			var dist = pos.distance_to(center)
+			
+			# 外側の輪郭（境界線）
+			if dist <= size/2:
+				if dist > size/2 - 2:
+					image.set_pixel(x, y, border_color)
+				else:
+					image.set_pixel(x, y, color)
+	
+	# 駒タイプに基づく追加デザイン
+	var label = ""
+	match piece_type:
+		"pawn": label = "P"
+		"rook": label = "R"
+		"knight": label = "N"
+		"bishop": label = "B"
+		"queen": label = "Q"
+		"king": label = "K"
+	
+	# ImageTextureを作成して返す
+	return ImageTexture.create_from_image(image)
 			)
 			
 			sprite.add_to_group("captured_" + str(player))

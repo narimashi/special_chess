@@ -64,8 +64,8 @@ func _set_button_texture(button: Button, texture_path: String, fallback_text: St
 func _ensure_default_font(label: Label) -> void:
 	if label:
 		# すでにテーマがある場合はそれを使用、なければ新規作成
-		var theme = label.get_theme() if label.get_theme() else Theme.new()
-		label.theme = theme
+		var custom_theme = label.get_theme() if label.get_theme() else Theme.new()
+		label.theme = custom_theme
 
 func _on_queen_selected() -> void:
 	_handle_selection(Globals.PieceType.QUEEN)

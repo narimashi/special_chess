@@ -10,7 +10,8 @@ config_version=5
 
 [application]
 
-run/main_scene="res://scenes/Main.tscn"
+config/name="持ち駒チェス"
+run/main_scene="uid://cf1875uytjy5l"
 config/features=PackedStringArray("4.4")
 
 [autoload]
