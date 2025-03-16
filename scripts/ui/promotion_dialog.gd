@@ -17,6 +17,20 @@ func _ready() -> void:
 	$VBoxContainer/HBoxContainer/RookButton.pressed.connect(_on_rook_selected)
 	$VBoxContainer/HBoxContainer/BishopButton.pressed.connect(_on_bishop_selected)
 	$VBoxContainer/HBoxContainer/KnightButton.pressed.connect(_on_knight_selected)
+	
+	# システムフォントを使用するためのフォントサイズ設定
+	_setup_fonts()
+
+func _setup_fonts() -> void:
+	# ラベルにフォントサイズを設定
+	if has_node("VBoxContainer/Label"):
+		$VBoxContainer/Label.add_theme_font_size_override("font_size", 36)
+	
+	# ボタンにフォントサイズを設定
+	for button_name in ["QueenButton", "RookButton", "BishopButton", "KnightButton"]:
+		var button = $VBoxContainer/HBoxContainer.get_node(button_name)
+		if button:
+			button.add_theme_font_size_override("font_size", 24)
 
 func show_for_piece(target_piece, to_position: Vector2) -> void:
 	piece = target_piece
@@ -37,9 +51,6 @@ func show_for_piece(target_piece, to_position: Vector2) -> void:
 	_set_button_texture($VBoxContainer/HBoxContainer/BishopButton, bishop_path, "B")
 	_set_button_texture($VBoxContainer/HBoxContainer/KnightButton, knight_path, "N")
 	
-	# システムフォントを使用するように設定
-	_ensure_default_font($VBoxContainer/Label)
-	
 	# ダイアログを表示
 	visible = true
 	
@@ -51,7 +62,7 @@ func _set_button_texture(button: Button, texture_path: String, fallback_text: St
 	if button == null:
 		return
 		
-	if FileAccess.file_exists(texture_path):
+	if ResourceLoader.exists(texture_path):
 		button.icon = load(texture_path)
 		button.text = ""
 	else:
@@ -59,13 +70,6 @@ func _set_button_texture(button: Button, texture_path: String, fallback_text: St
 		button.text = fallback_text
 		# フォントサイズを調整
 		button.add_theme_font_size_override("font_size", 24)
-
-# デフォルトフォントを確保
-func _ensure_default_font(label: Label) -> void:
-	if label:
-		# すでにテーマがある場合はそれを使用、なければ新規作成
-		var custom_theme = label.get_theme() if label.get_theme() else Theme.new()
-		label.theme = custom_theme
 
 func _on_queen_selected() -> void:
 	_handle_selection(Globals.PieceType.QUEEN)
@@ -90,6 +94,6 @@ func _handle_selection(promotion_type: int) -> void:
 func _input(event: InputEvent) -> void:
 	# モーダルモード中は他のクリックを無視
 	if visible and event is InputEventMouseButton and event.pressed:
-		var rect = get_rect()
+		var rect = get_global_rect()
 		if not rect.has_point(event.position):
 			get_viewport().set_input_as_handled()

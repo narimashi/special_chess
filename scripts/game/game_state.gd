@@ -164,15 +164,17 @@ func move_piece(piece, to_pos: Vector2, promotion_type = null) -> bool:
 	
 	# 駒取り処理
 	if captured:
-		# 持ち駒に追加
-		captured_pieces[piece.player].append(captured)
+		# 持ち駒に追加（オリジナルの駒情報をコピー）
+		var captured_copy = ChessPiece.new(captured.type, captured.player, Vector2(-1, -1))
+		captured_pieces[piece.player].append(captured_copy)
 		board[to_pos.x][to_pos.y] = null
 	
 	# 特殊な動き：アンパッサン
 	if is_en_passant:
 		var captured_pawn = board[to_pos.x][from_pos.y]
 		move_data["en_passant_captured"] = captured_pawn
-		captured_pieces[piece.player].append(captured_pawn)
+		var captured_copy = ChessPiece.new(captured_pawn.type, captured_pawn.player, Vector2(-1, -1))
+		captured_pieces[piece.player].append(captured_copy)
 		board[to_pos.x][from_pos.y] = null
 	
 	# 特殊な動き：キャスリング
@@ -221,6 +223,50 @@ func move_piece(piece, to_pos: Vector2, promotion_type = null) -> bool:
 	
 	return true
 
+func _update_castling_rights(piece) -> void:
+	if piece.type == Globals.PieceType.KING:
+		castling_rights[piece.player]["kingside"] = false
+		castling_rights[piece.player]["queenside"] = false
+	elif piece.type == Globals.PieceType.ROOK:
+		var pos = piece.board_position
+		if pos.x == 0:  # クイーンサイドのルーク
+			castling_rights[piece.player]["queenside"] = false
+		elif pos.x == 7:  # キングサイドのルーク
+			castling_rights[piece.player]["kingside"] = false
+
+func _is_castling_move(piece, to_pos: Vector2) -> bool:
+	if piece.type != Globals.PieceType.KING:
+		return false
+	
+	var from_pos = piece.board_position
+	return abs(from_pos.x - to_pos.x) > 1
+
+func _is_en_passant_move(piece, to_pos: Vector2) -> bool:
+	if piece.type != Globals.PieceType.PAWN:
+		return false
+	
+	var from_pos = piece.board_position
+	if en_passant_target and to_pos == en_passant_target:
+		return abs(from_pos.x - to_pos.x) == 1 and board[to_pos.x][to_pos.y] == null
+	
+	return false
+
+func _is_valid_position(pos: Vector2) -> bool:
+	return pos.x >= 0 and pos.x < Globals.BOARD_SIZE and pos.y >= 0 and pos.y < Globals.BOARD_SIZE
+
+func _get_current_player() -> int:
+	var white_count = 0
+	var black_count = 0
+	
+	for piece in get_all_pieces():
+		if piece.player == Globals.Player.WHITE:
+			white_count += 1
+		else:
+			black_count += 1
+	
+	# 白と黒の数が同じなら白番、それ以外は黒番
+	return Globals.Player.WHITE if white_count == black_count else Globals.Player.BLACK
+
 func place_captured_piece(piece_index: int, pos: Vector2) -> bool:
 	# 配置可能かチェック
 	if not _is_valid_position(pos) or board[pos.x][pos.y] != null:
@@ -238,15 +284,16 @@ func place_captured_piece(piece_index: int, pos: Vector2) -> bool:
 			return false
 	
 	# 持ち駒リストから削除
+	var placed_piece = captured_pieces[player][piece_index]
 	captured_pieces[player].remove_at(piece_index)
 	
 	# 盤面に配置
-	piece.board_position = pos
-	board[pos.x][pos.y] = piece
+	placed_piece.board_position = pos
+	board[pos.x][pos.y] = placed_piece
 	
 	# 移動履歴に追加
 	var move_data = {
-		"piece": piece,
+		"piece": placed_piece,
 		"from": null,  # 持ち駒からの配置
 		"to": pos,
 		"is_drop": true
@@ -597,17 +644,6 @@ func is_in_check(player: int) -> bool:
 	
 	return _is_square_attacked(king.board_position, player)
 
-func is_checkmate(player: int) -> bool:
-	if not is_in_check(player):
-		return false
-	
-	# プレイヤーの全ての駒について有効な移動があるか確認
-	for piece in get_player_pieces(player):
-		if not get_valid_moves(piece).is_empty():
-			return false
-	
-	return true
-
 func is_stalemate(player: int) -> bool:
 	if is_in_check(player):
 		return false
@@ -625,7 +661,8 @@ func is_stalemate(player: int) -> bool:
 					var pos = Vector2(x, y)
 					
 					# 置ける持ち駒があるかチェック
-					for piece in captured_pieces[player]:
+					for piece_index in range(captured_pieces[player].size()):
+						var piece = captured_pieces[player][piece_index]
 						if piece.type == Globals.PieceType.PAWN and (y == 0 or y == 7):
 							continue  # ポーンは端には置けない
 						
@@ -640,46 +677,33 @@ func is_stalemate(player: int) -> bool:
 	
 	return true
 
-func _update_castling_rights(piece) -> void:
-	if piece.type == Globals.PieceType.KING:
-		castling_rights[piece.player]["kingside"] = false
-		castling_rights[piece.player]["queenside"] = false
-	elif piece.type == Globals.PieceType.ROOK:
-		var pos = piece.board_position
-		if pos.x == 0:  # クイーンサイドのルーク
-			castling_rights[piece.player]["queenside"] = false
-		elif pos.x == 7:  # キングサイドのルーク
-			castling_rights[piece.player]["kingside"] = false
-
-func _is_castling_move(piece, to_pos: Vector2) -> bool:
-	if piece.type != Globals.PieceType.KING:
+func is_checkmate(player: int) -> bool:
+	if not is_in_check(player):
 		return false
 	
-	var from_pos = piece.board_position
-	return abs(from_pos.x - to_pos.x) > 1
-
-func _is_en_passant_move(piece, to_pos: Vector2) -> bool:
-	if piece.type != Globals.PieceType.PAWN:
-		return false
+	# プレイヤーの全ての駒について有効な移動があるか確認
+	for piece in get_player_pieces(player):
+		if not get_valid_moves(piece).is_empty():
+			return false
 	
-	var from_pos = piece.board_position
-	if en_passant_target and to_pos == en_passant_target:
-		return abs(from_pos.x - to_pos.x) == 1 and board[to_pos.x][to_pos.y] == null
-	
-	return false
-
-func _is_valid_position(pos: Vector2) -> bool:
-	return pos.x >= 0 and pos.x < Globals.BOARD_SIZE and pos.y >= 0 and pos.y < Globals.BOARD_SIZE
-
-func _get_current_player() -> int:
-	var white_count = 0
-	var black_count = 0
-	
-	for piece in get_all_pieces():
-		if piece.player == Globals.Player.WHITE:
-			white_count += 1
-		else:
-			black_count += 1
-	
-	# 白と黒の数が同じなら白番、それ以外は黒番
-	return Globals.Player.WHITE if white_count == black_count else Globals.Player.BLACK
+	# 持ち駒があり、配置可能な場所があるか確認
+	if not captured_pieces[player].is_empty():
+		for x in range(Globals.BOARD_SIZE):
+			for y in range(Globals.BOARD_SIZE):
+				if board[x][y] == null:
+					var pos = Vector2(x, y)
+					
+					# 置ける持ち駒があるかチェック
+					for piece_index in range(captured_pieces[player].size()):
+						var piece = captured_pieces[player][piece_index]
+						if piece.type == Globals.PieceType.PAWN and (y == 0 or y == 7):
+							continue  # ポーンは端には置けない
+						
+						# 一時的に駒を配置してチェックを避けられるか確認
+						board[x][y] = piece
+						var king = _find_king(player)
+						var is_in_check = king != null and _is_square_attacked(king.board_position, player)
+						board[x][y] = null
+						
+						if not is_in_check:
+							return false

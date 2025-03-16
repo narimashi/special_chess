@@ -3,51 +3,49 @@ extends Node2D
 # チェスボードの表示を管理するクラス
 
 # ボードのテーマカラー
-@export var light_square_color: Color = Color(0.9, 0.9, 0.8)
-@export var dark_square_color: Color = Color(0.5, 0.4, 0.3)
-@export var highlight_color: Color = Color(0.3, 0.7, 0.3, 0.5)
-@export var move_indicator_color: Color = Color(0.2, 0.6, 0.9, 0.5)
+var light_square_color: Color = Color(0.6, 0.4, 0.3)  # 明るい茶色
+var dark_square_color: Color = Color(0.36, 0.2, 0.2)  # 深い茶色
+var highlight_color: Color = Color(0.3, 0.7, 0.3, 0.5)  # 選択マスのハイライト
+var move_indicator_color: Color = Color(0.2, 0.6, 0.9, 0.5)  # 移動可能マスの表示
 
-var highlight_position = null
-var valid_move_positions = []
-var game_state = null
+# ボードの大きさと位置の設定
+var board_size: int = 8  # 8x8 の標準的なチェスボード
+var square_size: int = 80  # マスのサイズ（ピクセル）
+var board_position: Vector2 = Vector2(60, 100)  # ボードの左上の位置
+
+# 選択状態の管理
+var highlight_position = null  # 選択されたマスの位置
+var valid_move_positions = []  # 移動可能なマスの位置
 
 func _ready() -> void:
-	# ゲーム状態参照の取得
-	game_state = get_parent().get_node("GameState")
-	game_state.board_updated.connect(_on_board_updated)
+	# ボードの初期位置を設定
+	position = board_position
 	
-	# 初期ボード状態の描画
+	# 初期描画
 	queue_redraw()
 
 func _draw() -> void:
 	# ボードの描画
 	_draw_board()
 	
-	# ハイライト表示
+	# 選択マスのハイライト
 	if highlight_position != null:
 		_draw_highlight(highlight_position)
 	
-	# 有効移動先の表示
+	# 移動可能マスの表示
 	for pos in valid_move_positions:
 		_draw_move_indicator(pos)
-	
-	# 駒の描画（ゲーム状態から）
-	if game_state:
-		_draw_pieces()
 
 func _draw_board() -> void:
 	# 8x8のチェスボードを描画
-	for x in range(Globals.BOARD_SIZE):
-		for y in range(Globals.BOARD_SIZE):
+	for x in range(board_size):
+		for y in range(board_size):
 			var color = light_square_color if (x + y) % 2 == 0 else dark_square_color
-			var rect = Rect2(x * Globals.SQUARE_SIZE, y * Globals.SQUARE_SIZE, 
-			               Globals.SQUARE_SIZE, Globals.SQUARE_SIZE)
+			var rect = Rect2(x * square_size, y * square_size, square_size, square_size)
 			draw_rect(rect, color)
 	
 	# ボード枠線
-	var border_rect = Rect2(0, 0, Globals.BOARD_SIZE * Globals.SQUARE_SIZE, 
-	                      Globals.BOARD_SIZE * Globals.SQUARE_SIZE)
+	var border_rect = Rect2(0, 0, board_size * square_size, board_size * square_size)
 	draw_rect(border_rect, Color.BLACK, false, 2.0)
 	
 	# 座標ラベル（a-h, 1-8）
@@ -55,94 +53,67 @@ func _draw_board() -> void:
 
 func _draw_coordinate_labels() -> void:
 	var font = ThemeDB.fallback_font
-	var font_size = ThemeDB.fallback_font_size
-	var label_color = Color(0.2, 0.2, 0.2)
+	var font_size = 14
+	var label_color = Color(0.9, 0.9, 0.9)  # 明るい色で見やすく
 	
 	# 横座標（a-h）
-	for i in range(Globals.BOARD_SIZE):
+	for i in range(board_size):
 		var label = char(97 + i)  # aから始まるアルファベット
-		var pos = Vector2(i * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE * 0.5, 
-		                 Globals.BOARD_SIZE * Globals.SQUARE_SIZE + 15)
+		var pos = Vector2(i * square_size + square_size * 0.5, board_size * square_size + 15)
 		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, label_color)
 	
 	# 縦座標（1-8）、上から8,7,6...
-	for i in range(Globals.BOARD_SIZE):
-		var label = str(Globals.BOARD_SIZE - i)
-		var pos = Vector2(-15, i * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE * 0.5)
+	for i in range(board_size):
+		var label = str(board_size - i)
+		var pos = Vector2(-15, i * square_size + square_size * 0.5)
 		draw_string(font, pos, label, HORIZONTAL_ALIGNMENT_CENTER, -1, font_size, label_color)
 
-func _draw_pieces() -> void:
-	# ゲーム状態から駒情報を取得して描画
-	var pieces = game_state.get_all_pieces()
-	
-	for piece in pieces:
-		var texture = _get_piece_texture(piece.type, piece.player)
-		var pos = Vector2(
-			piece.board_position.x * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE / 2,
-			piece.board_position.y * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE / 2
-		)
-		draw_texture_centered(texture, pos)
-
 func _draw_highlight(pos) -> void:
-	# 選択中の駒のハイライト
-	var rect = Rect2(pos.x * Globals.SQUARE_SIZE, pos.y * Globals.SQUARE_SIZE,
-	               Globals.SQUARE_SIZE, Globals.SQUARE_SIZE)
+	# 選択マスのハイライト表示
+	var rect = Rect2(pos.x * square_size, pos.y * square_size, square_size, square_size)
 	draw_rect(rect, highlight_color)
 
 func _draw_move_indicator(pos) -> void:
-	# 移動可能位置の表示
-	var center = Vector2(
-		pos.x * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE / 2,
-		pos.y * Globals.SQUARE_SIZE + Globals.SQUARE_SIZE / 2
-	)
+	# 移動可能マスの表示
+	var center = Vector2(pos.x * square_size + square_size / 2, pos.y * square_size + square_size / 2)
 	
-	# 駒があるマスは枠線、空きマスは円で表示
-	if game_state.get_piece_at(pos):
-		var rect = Rect2(pos.x * Globals.SQUARE_SIZE, pos.y * Globals.SQUARE_SIZE,
-		               Globals.SQUARE_SIZE, Globals.SQUARE_SIZE)
-		draw_rect(rect, move_indicator_color, false, 3.0)
-	else:
-		draw_circle(center, Globals.SQUARE_SIZE * 0.15, move_indicator_color)
-
-func draw_texture_centered(texture, position) -> void:
-	# テクスチャを中央揃えで描画
-	var size = texture.get_size()
-	var dest_rect = Rect2(position.x - size.x / 2, position.y - size.y / 2, size.x, size.y)
-	draw_texture_rect(texture, dest_rect, false)
-
-func _get_piece_texture(piece_type, player) -> Texture2D:
-	# 駒の種類とプレイヤーに応じたテクスチャを返す
-	var piece_name = ""
-	match piece_type:
-		Globals.PieceType.PAWN:
-			piece_name = "pawn"
-		Globals.PieceType.ROOK:
-			piece_name = "rook"
-		Globals.PieceType.KNIGHT:
-			piece_name = "knight"
-		Globals.PieceType.BISHOP:
-			piece_name = "bishop"
-		Globals.PieceType.QUEEN:
-			piece_name = "queen"
-		Globals.PieceType.KING:
-			piece_name = "king"
-	
-	var color = "white" if player == Globals.Player.WHITE else "black"
-	return load("res://assets/pieces/" + color + "_" + piece_name + ".png")
+	# 駒があるマスは枠線、空きマスは円で表示（この例では全て円で表示）
+	draw_circle(center, square_size * 0.15, move_indicator_color)
 
 func highlight_selected(pos) -> void:
+	# マスの選択状態を設定
 	highlight_position = pos
 	queue_redraw()
 
 func highlight_valid_moves(moves) -> void:
+	# 移動可能なマスを設定
 	valid_move_positions = moves
 	queue_redraw()
 
 func clear_highlights() -> void:
+	# ハイライト表示をクリア
 	highlight_position = null
 	valid_move_positions = []
 	queue_redraw()
 
-func _on_board_updated() -> void:
-	# ボード状態が変更されたら再描画
-	queue_redraw()
+func _input(event: InputEvent) -> void:
+	# マウスクリックの処理
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var local_pos = to_local(event.global_position)
+		var grid_pos = Vector2(int(local_pos.x / square_size), int(local_pos.y / square_size))
+		
+		# ボード内のクリックかチェック
+		if grid_pos.x >= 0 and grid_pos.x < board_size and grid_pos.y >= 0 and grid_pos.y < board_size:
+			# テスト用：クリックしたマスをハイライト表示
+			if highlight_position == grid_pos:
+				clear_highlights()  # 同じマスをクリックしたらクリア
+			else:
+				highlight_selected(grid_pos)
+				
+				# テスト用：ランダムな移動可能マスを表示
+				var test_moves = []
+				for i in range(3):  # 3つのランダムなマスを表示
+					var x = randi() % board_size
+					var y = randi() % board_size
+					test_moves.append(Vector2(x, y))
+				highlight_valid_moves(test_moves)

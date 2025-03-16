@@ -1,5 +1,236 @@
-# 音声ファイルのプリロード
 extends Node2D
+
+# ゲーム画面の管理
+
+var game_state
+var bot_player
+var current_player: int = Globals.Player.WHITE
+var selected_piece = null
+var valid_moves: Array = []
+var is_game_over: bool = false
+var selected_captured_piece_index = null
+var selected_captured_piece_player = null
+
+# スクリーンショット機能のためのカウンタ
+var screenshot_counter: int = 0
+
+func _ready() -> void:
+	# ゲーム状態の初期化
+	game_state = $GameState
+	game_state.board_updated.connect(_on_board_updated)
+	game_state.game_over.connect(_on_game_over)
+	game_state.check.connect(_on_check)
+	
+	# ボットプレイヤーの初期化
+	bot_player = $BotPlayer
+	bot_player.initialize(game_state, Globals.Player.BLACK, Globals.current_difficulty)
+	bot_player.move_complete.connect(_switch_player)
+	
+	# UIの初期化
+	_update_ui()
+	
+	# ラベルのフォントサイズを設定
+	_setup_fonts()
+	
+	# MP3音声ファイルのプリロード
+	_preload_audio_files()
+	
+	# ゲーム開始
+	_start_game()
+
+# システムフォントの設定
+func _setup_fonts() -> void:
+	# ラベルとボタンのフォントサイズを設定
+	$UI/TurnLabel.add_theme_font_size_override("font_size", 24)
+	$UI/ResignButton.add_theme_font_size_override("font_size", 24)
+	
+	if $CutInManager/CutInContainer/CutInLabel:
+		$CutInManager/CutInContainer/CutInLabel.add_theme_font_size_override("font_size", 36)
+	
+	if $PromotionDialog/VBoxContainer/Label:
+		$PromotionDialog/VBoxContainer/Label.add_theme_font_size_override("font_size", 36)
+	
+	if $GameOverDialog/VBoxContainer/ResultLabel:
+		$GameOverDialog/VBoxContainer/ResultLabel.add_theme_font_size_override("font_size", 36)
+	
+	if $GameOverDialog/VBoxContainer/PlayAgainButton:
+		$GameOverDialog/VBoxContainer/PlayAgainButton.add_theme_font_size_override("font_size", 24)
+	
+	if $GameOverDialog/VBoxContainer/MainMenuButton:
+		$GameOverDialog/VBoxContainer/MainMenuButton.add_theme_font_size_override("font_size", 24)
+
+func _process(_delta: float) -> void:
+	# ボットの番かチェック
+	if current_player == Globals.Player.BLACK and !is_game_over:
+		bot_player.make_move()
+
+func _input(event: InputEvent) -> void:
+	if is_game_over:
+		return
+		
+	if current_player != Globals.Player.WHITE:
+		return
+		
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+		var click_pos = get_global_mouse_position()
+		_handle_click(click_pos)
+	
+	# デバッグ機能: F12でスクリーンショット
+	if event is InputEventKey and event.pressed and event.keycode == KEY_F12:
+		_take_screenshot()
+
+func _handle_click(click_pos: Vector2) -> void:
+	# 盤上の位置を計算
+	var board_pos = _get_board_position(click_pos)
+	
+	# 持ち駒エリアのクリック判定
+	if _is_captured_area_click(click_pos):
+		_handle_captured_area_click(click_pos)
+		return
+		
+	# 盤外のクリックは無視
+	if !_is_valid_board_position(board_pos):
+		_clear_all_selections()
+		return
+	
+	if selected_captured_piece_index != null:
+		# 持ち駒を選択中の場合、盤上に配置を試みる
+		_try_place_captured_piece(board_pos)
+	elif selected_piece != null:
+		# 駒を選択中の場合
+		if board_pos in valid_moves:
+			# 有効な移動先なら移動
+			_move_piece(selected_piece, board_pos)
+		else:
+			# 別の駒を選択
+			_select_piece_at(board_pos)
+	else:
+		# 新しく駒を選択
+		_select_piece_at(board_pos)
+
+func _select_piece_at(board_pos: Vector2) -> void:
+	var piece = game_state.get_piece_at(board_pos)
+	
+	if piece and piece.player == current_player:
+		selected_piece = piece
+		valid_moves = game_state.get_valid_moves(piece)
+		$Board.highlight_selected(board_pos)
+		$Board.highlight_valid_moves(valid_moves)
+	else:
+		_clear_all_selections()
+
+func _try_place_captured_piece(board_pos: Vector2) -> void:
+	if selected_captured_piece_player != current_player:
+		_clear_all_selections()
+		return
+		
+	var success = game_state.place_captured_piece(selected_captured_piece_index, board_pos)
+	
+	if success:
+		if Globals.sound_enabled:
+			$Sounds/Move.play()
+			
+		_clear_all_selections()
+		_switch_player()
+	else:
+		# 配置失敗
+		_clear_all_selections()
+
+func _move_piece(piece, to_pos: Vector2) -> void:
+	var from_pos = piece.board_position
+	var captured = game_state.get_piece_at(to_pos)
+	var promotion_needed = _is_promotion_needed(piece, to_pos)
+	
+	if promotion_needed:
+		# 成り駒の選択ダイアログを表示
+		$PromotionDialog.show_for_piece(piece, to_pos)
+		await $PromotionDialog.promotion_selected
+	
+	var success = game_state.move_piece(piece, to_pos)
+	
+	if success:
+		if captured:
+			_play_sound("Capture")
+		else:
+			_play_sound("Move")
+				
+		_clear_all_selections()
+		
+		# 戦術の検出
+		var tactics = $TacticDetector.detect_tactics(piece, from_pos, to_pos)
+		for tactic in tactics:
+			_on_tactic_detected(tactic)
+		
+		_switch_player()
+
+func _switch_player() -> void:
+	current_player = Globals.Player.BLACK if current_player == Globals.Player.WHITE else Globals.Player.WHITE
+	_update_ui()
+	
+	# チェック状態の確認
+	if game_state.is_in_check(current_player):
+		_on_check()
+		
+		# チェックメイト・ステイルメイトの確認
+		if game_state.is_checkmate(current_player):
+			_on_game_over(Globals.Player.WHITE if current_player == Globals.Player.BLACK else Globals.Player.BLACK)
+	elif game_state.is_stalemate(current_player):
+		_on_game_over(null)  # 引き分け
+
+func _update_ui() -> void:
+	# ターン表示の更新
+	$UI/TurnLabel.text = "Turn: " + Globals.get_player_name(current_player)
+	
+	# 持ち駒表示の更新
+	$CapturedArea.update_display(game_state.captured_pieces)
+
+func _is_promotion_needed(piece, to_pos: Vector2) -> bool:
+	return piece.type == Globals.PieceType.PAWN and (
+		(piece.player == Globals.Player.WHITE and to_pos.y == 0) or
+		(piece.player == Globals.Player.BLACK and to_pos.y == 7)
+	)
+
+func _get_board_position(screen_pos: Vector2) -> Vector2:
+	var local_pos = $Board.to_local(screen_pos)
+	var col = int(local_pos.x / Globals.SQUARE_SIZE)
+	var row = int(local_pos.y / Globals.SQUARE_SIZE)
+	return Vector2(col, row)
+
+func _is_valid_board_position(pos: Vector2) -> bool:
+	return pos.x >= 0 and pos.x < Globals.BOARD_SIZE and pos.y >= 0 and pos.y < Globals.BOARD_SIZE
+
+func _is_captured_area_click(screen_pos: Vector2) -> bool:
+	return $CapturedArea.get_global_rect().has_point(screen_pos)
+
+func _handle_captured_area_click(screen_pos: Vector2) -> void:
+	var index = $CapturedArea.get_piece_index_at(screen_pos)
+	
+	if index >= 0:
+		var player = Globals.Player.WHITE
+		
+		# 黒の持ち駒エリア内のクリックか判定
+		if $CapturedArea.black_area_rect.has_point($CapturedArea.to_local(screen_pos)):
+			player = Globals.Player.BLACK
+		
+		_clear_all_selections()
+		
+		if player == current_player:
+			selected_captured_piece_index = index
+			selected_captured_piece_player = player
+			$CapturedArea.highlight_piece(player, index)
+	else:
+		_clear_all_selections()
+
+func _clear_all_selections() -> void:
+	selected_piece = null
+	valid_moves = []
+	$Board.clear_highlights()
+	
+	selected_captured_piece_index = null
+	selected_captured_piece_player = null
+	$CapturedArea.clear_selection()
+
+# 音声ファイルのプリロード
 func _preload_audio_files() -> void:
 	if not Globals.sound_enabled:
 		return
@@ -34,200 +265,6 @@ func _start_game() -> void:
 	if Globals.sound_enabled and has_node("Sounds/GameStart") and $Sounds/GameStart.stream != null:
 		$Sounds/GameStart.play()
 
-
-
-# ゲーム画面の管理
-
-var game_state
-var bot_player
-var current_player: int = Globals.Player.WHITE
-var selected_piece = null
-var valid_moves: Array = []
-var is_game_over: bool = false
-var selected_captured_piece = null
-
-# スクリーンショット機能のためのカウンタ
-var screenshot_counter: int = 0
-
-func _ready() -> void:
-	# ゲーム状態の初期化
-	game_state = $GameState
-	game_state.game_over.connect(_on_game_over)
-	game_state.check.connect(_on_check)
-	game_state.tactic_detected.connect(_on_tactic_detected)
-	
-	# ボットプレイヤーの初期化
-	bot_player = $BotPlayer
-	bot_player.initialize(game_state, Globals.Player.BLACK, Globals.current_difficulty)
-	bot_player.move_complete.connect(_switch_player)
-	
-	# UIの初期化
-	_update_ui()
-	
-	# MP3音声ファイルのプリロード
-	_preload_audio_files()
-	
-	# ゲーム開始
-	_start_game()
-
-func _process(_delta: float) -> void:
-	# ボットの番かチェック
-	if current_player == Globals.Player.BLACK and !is_game_over:
-		bot_player.make_move()
-
-func _input(event: InputEvent) -> void:
-	if is_game_over:
-		return
-		
-	if current_player != Globals.Player.WHITE:
-		return
-		
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-		var click_pos = get_global_mouse_position()
-		_handle_click(click_pos)
-	
-	# デバッグ機能: F12でスクリーンショット
-	if event is InputEventKey and event.pressed and event.keycode == KEY_F12:
-		_take_screenshot()
-
-func _handle_click(click_pos: Vector2) -> void:
-	# 盤上の位置を計算
-	var board_pos = _get_board_position(click_pos)
-	
-	# 持ち駒エリアのクリック判定
-	if _is_captured_area_click(click_pos):
-		_handle_captured_area_click(click_pos)
-		return
-		
-	# 盤外のクリックは無視
-	if !_is_valid_board_position(board_pos):
-		return
-	
-	if selected_captured_piece != null:
-		# 持ち駒を選択中の場合、盤上に配置を試みる
-		_try_place_captured_piece(board_pos)
-	elif selected_piece != null:
-		# 駒を選択中の場合
-		if board_pos in valid_moves:
-			# 有効な移動先なら移動
-			_move_piece(selected_piece, board_pos)
-		else:
-			# 別の駒を選択
-			_select_piece_at(board_pos)
-	else:
-		# 新しく駒を選択
-		_select_piece_at(board_pos)
-
-func _select_piece_at(board_pos: Vector2) -> void:
-	var piece = game_state.get_piece_at(board_pos)
-	
-	if piece and piece.player == current_player:
-		selected_piece = piece
-		valid_moves = game_state.get_valid_moves(piece)
-		$Board.highlight_selected(board_pos)
-		$Board.highlight_valid_moves(valid_moves)
-	else:
-		selected_piece = null
-		valid_moves = []
-		$Board.clear_highlights()
-
-func _try_place_captured_piece(board_pos: Vector2) -> void:
-	var success = game_state.place_captured_piece(selected_captured_piece, board_pos)
-	
-	if success:
-		if Globals.sound_enabled:
-			$Sounds/Move.play()
-			
-		selected_captured_piece = null
-		$CapturedArea.clear_selection()
-		_switch_player()
-	else:
-		# 配置失敗
-		selected_captured_piece = null
-		$CapturedArea.clear_selection()
-
-func _move_piece(piece, to_pos: Vector2) -> void:
-	var from_pos = piece.board_position
-	var captured = game_state.get_piece_at(to_pos)
-	var promotion_needed = _is_promotion_needed(piece, to_pos)
-	
-	if promotion_needed:
-		# 成り駒の選択ダイアログを表示
-		$PromotionDialog.show_for_piece(piece, to_pos)
-		await $PromotionDialog.promotion_selected
-	
-	var success = game_state.move_piece(piece, to_pos)
-	
-	if success:
-		if captured:
-			_play_sound("Capture")
-		else:
-			_play_sound("Move")
-				
-		selected_piece = null
-		valid_moves = []
-		$Board.clear_highlights()
-		
-		# 戦術の検出
-		var tactics = $TacticDetector.detect_tactics(piece, from_pos, to_pos)
-		for tactic in tactics:
-			_on_tactic_detected(tactic)
-		
-		_switch_player()
-
-func _switch_player() -> void:
-	current_player = Globals.Player.BLACK if current_player == Globals.Player.WHITE else Globals.Player.WHITE
-	_update_ui()
-	
-	# チェック状態の確認
-	if game_state.is_in_check(current_player):
-		_on_check()
-		
-		# チェックメイト・ステイルメイトの確認
-		if game_state.is_checkmate(current_player):
-			_on_game_over(Globals.Player.WHITE if current_player == Globals.Player.BLACK else Globals.Player.BLACK)
-	elif game_state.is_stalemate(current_player):
-		_on_game_over(null)  # 引き分け
-
-func _update_ui() -> void:
-	# ターン表示の更新
-	$UI/TurnLabel.text = "Turn: " + Globals.get_player_name(current_player)
-	
-	# 持ち駒表示の更新
-	$CapturedArea.update_display(game_state.get_captured_pieces())
-
-func _is_promotion_needed(piece, to_pos: Vector2) -> bool:
-	return piece.type == Globals.PieceType.PAWN and (
-		(piece.player == Globals.Player.WHITE and to_pos.y == 0) or
-		(piece.player == Globals.Player.BLACK and to_pos.y == 7)
-	)
-
-func _get_board_position(screen_pos: Vector2) -> Vector2:
-	var local_pos = $Board.to_local(screen_pos)
-	var col = int(local_pos.x / Globals.SQUARE_SIZE)
-	var row = int(local_pos.y / Globals.SQUARE_SIZE)
-	return Vector2(col, row)
-
-func _is_valid_board_position(pos: Vector2) -> bool:
-	return pos.x >= 0 and pos.x < Globals.BOARD_SIZE and pos.y >= 0 and pos.y < Globals.BOARD_SIZE
-
-func _is_captured_area_click(screen_pos: Vector2) -> bool:
-	return $CapturedArea.get_rect().has_point($CapturedArea.to_local(screen_pos))
-
-func _handle_captured_area_click(screen_pos: Vector2) -> void:
-	var index = $CapturedArea.get_piece_index_at(screen_pos)
-	
-	if index >= 0:
-		selected_piece = null
-		valid_moves = []
-		$Board.clear_highlights()
-		
-		selected_captured_piece = index
-		$CapturedArea.highlight_piece(current_player, index)
-	else:
-		selected_captured_piece = null
-		$CapturedArea.clear_selection()
-
 # 効果音再生
 func _play_sound(sound_name: String) -> void:
 	if not Globals.sound_enabled:
@@ -239,13 +276,20 @@ func _play_sound(sound_name: String) -> void:
 		if audio_player.stream != null:
 			audio_player.play()
 
+func _on_board_updated() -> void:
+	# ボードが更新されたときのアップデート
+	# UIの更新
+	_update_ui()
+
 func _on_check() -> void:
 	_play_sound("Check")
-	$CutInManager.play_cutin("check")
+	if has_node("CutInManager"):
+		$CutInManager.play_cutin("check")
 
 func _on_tactic_detected(tactic: String) -> void:
 	_play_sound("Tactic")
-	$CutInManager.play_cutin(tactic)
+	if has_node("CutInManager"):
+		$CutInManager.play_cutin(tactic)
 
 func _on_game_over(winner) -> void:
 	is_game_over = true
@@ -272,10 +316,6 @@ func _on_resign_confirmed() -> void:
 		# 現在のプレイヤーの投了
 		var winner = Globals.Player.BLACK if current_player == Globals.Player.WHITE else Globals.Player.WHITE
 		_on_game_over(winner)
-
-func _on_main_menu_button_pressed() -> void:
-	# メインメニューへ戻る
-	get_tree().change_scene_to_file("res://scenes/MainMenu.tscn")
 
 func _take_screenshot() -> void:
 	# スクリーンショット撮影（デバッグ機能）

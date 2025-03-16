@@ -1,29 +1,4 @@
-# 駒の代替テクスチャを作成
-func _create_default_piece_texture(player: int, piece_type: String) -> Texture2D:
-	var size = 64
-	var image = Image.create(size, size, false, Image.FORMAT_RGBA8)
-	image.fill(Color(0, 0, 0, 0)) # 透明で初期化
-	
-	# 駒の種類に基づいて形を決定
-	var color = Color.WHITE if player == Globals.Player.WHITE else Color.BLACK
-	var border_color = Color.BLACK if player == Globals.Player.WHITE else Color.WHITE
-	
-	# 基本の円を描画
-	for x in range(size):
-		for y in range(size):
-			var center = Vector2(size/2, size/2)
-			var pos = Vector2(x, y)
-			var dist = pos.distance_to(center)
-			
-			# 外側の輪郭（境界線）
-			if dist <= size/2:
-				if dist > size/2 - 2:
-					image.set_pixel(x, y, border_color)
-				else:
-					image.set_pixel(x, y, color)
-	
-	# ImageTextureを作成して返す
-	return ImageTexture.create_from_image(image)extends Control
+extends Control
 
 # 持ち駒表示エリア
 
@@ -53,6 +28,12 @@ func _draw() -> void:
 		draw_rect(highlight_rect, Color(0.3, 0.7, 0.3, 0.5))
 
 func update_display(captured_pieces: Dictionary) -> void:
+	# 既存の駒スプライトを削除
+	for child in get_children():
+		if child.is_in_group("captured_piece"):
+			remove_child(child)
+			child.queue_free()
+			
 	# 白の持ち駒表示
 	_draw_captured_pieces(Globals.Player.WHITE, captured_pieces[Globals.Player.WHITE], white_area_rect)
 	
@@ -63,13 +44,6 @@ func update_display(captured_pieces: Dictionary) -> void:
 	queue_redraw()
 
 func _draw_captured_pieces(player: int, pieces: Array, area_rect: Rect2) -> void:
-	# 既存の駒スプライトを削除
-	for child in get_children():
-		if child.is_in_group("captured_" + str(player)):
-			remove_child(child)
-			child.queue_free()
-	
-	# 新しい駒スプライトを追加
 	for i in range(pieces.size()):
 		var piece = pieces[i]
 		var sprite = Sprite2D.new()
@@ -89,14 +63,14 @@ func _draw_captured_pieces(player: int, pieces: Array, area_rect: Rect2) -> void
 			Globals.PieceType.KING:
 				piece_name = "king"
 		
-		var texture_path = "res://assets/pieces/white_" + piece_name + ".png" if player == Globals.Player.WHITE else "res://assets/pieces/black_" + piece_name + ".png"
+		var texture_path = "res://assets/pieces/" + ("white" if player == Globals.Player.WHITE else "black") + "_" + piece_name + ".png"
 		var texture = null
 		
 		# テクスチャファイルが存在するか確認
 		if ResourceLoader.exists(texture_path):
 			texture = load(texture_path)
 		else:
-			# デフォルトの代替テクスチャを作成（黒白の円形）
+			# デフォルトの代替テクスチャを作成
 			texture = _create_default_piece_texture(player, piece_name)
 		
 		if texture:
@@ -109,11 +83,7 @@ func _draw_captured_pieces(player: int, pieces: Array, area_rect: Rect2) -> void
 				area_rect.position.y + area_rect.size.y / 2
 			)
 			
-			sprite.add_to_group("captured_" + str(player))
-			add_child(sprite)
-	
-			)
-			
+			sprite.add_to_group("captured_piece")
 			sprite.add_to_group("captured_" + str(player))
 			add_child(sprite)
 
@@ -141,22 +111,56 @@ func _create_default_piece_texture(player: int, piece_type: String) -> Texture2D
 				else:
 					image.set_pixel(x, y, color)
 	
-	# 駒タイプに基づく追加デザイン
-	var label = ""
+	# 駒タイプに基づく追加デザイン（単純な形状）
 	match piece_type:
-		"pawn": label = "P"
-		"rook": label = "R"
-		"knight": label = "N"
-		"bishop": label = "B"
-		"queen": label = "Q"
-		"king": label = "K"
+		"pawn":
+			# ポーン（上部が丸い）
+			for x in range(size/2 - 10, size/2 + 10):
+				for y in range(size/2 - 15, size/2 - 5):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
+		"rook":
+			# ルーク（上部が四角い）
+			for x in range(size/2 - 15, size/2 + 15):
+				for y in range(size/2 - 15, size/2 - 5):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
+		"bishop":
+			# ビショップ（上部が斜め）
+			for i in range(15):
+				if 0 <= size/2 - 15 + i and size/2 - 15 + i < size and 0 <= size/2 - 15 + i and size/2 - 15 + i < size:
+					image.set_pixel(size/2 - 15 + i, size/2 - 15 + i, color)
+				if 0 <= size/2 + 15 - i and size/2 + 15 - i < size and 0 <= size/2 - 15 + i and size/2 - 15 + i < size:
+					image.set_pixel(size/2 + 15 - i, size/2 - 15 + i, color)
+		"knight":
+			# ナイト（L字型）
+			for x in range(size/2 - 5, size/2 + 15):
+				for y in range(size/2 - 15, size/2 - 10):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
+			for x in range(size/2 + 5, size/2 + 15):
+				for y in range(size/2 - 15, size/2):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
+		"queen":
+			# クイーン（上部が三角形）
+			for i in range(15):
+				for j in range(i):
+					if 0 <= size/2 - i + j and size/2 - i + j < size and 0 <= size/2 - 15 + i and size/2 - 15 + i < size:
+						image.set_pixel(size/2 - i + j, size/2 - 15 + i, color)
+		"king":
+			# キング（十字）
+			for x in range(size/2 - 2, size/2 + 3):
+				for y in range(size/2 - 15, size/2 - 5):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
+			for x in range(size/2 - 10, size/2 + 11):
+				for y in range(size/2 - 10, size/2 - 5):
+					if 0 <= x and x < size and 0 <= y and y < size:
+						image.set_pixel(x, y, color)
 	
 	# ImageTextureを作成して返す
 	return ImageTexture.create_from_image(image)
-			)
-			
-			sprite.add_to_group("captured_" + str(player))
-			add_child(sprite)
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
